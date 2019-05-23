@@ -25,11 +25,10 @@ import (
 import "C"
 
 const (
-	ZEND_ENGINE_3 = 3
-	ZEND_ENGINE_2 = 2
+	ZendEngine3 = 3
 )
 
-var ZEND_ENGINE = int(C.gozend_zend_version_no())
+var ZendEngine = int(C.gozend_zend_version_no())
 
 ////export call_user_function_string
 func Call_user_function_string(func_name string, arg string) (string, error) {

@@ -207,18 +207,21 @@ func AddClass(name string, ctor interface{}) error {
 	return errors.New("add class error.")
 }
 
+// 添加析构函数
 func addDestruct(cidx int, cname string, ctor interface{}) {
 	mname := "__destruct"
 	fidx := 1 // 方法索引值
 	addMethod(ctor, cidx, fidx, cname, mname, ctor, false, true)
 }
 
+// 添加构造函数
 func addConstruct(cidx int, cname string, ctor interface{}) {
 	mname := "__construct"
 	fidx := 0 // 方法索引值
 	addMethod(ctor, cidx, fidx, cname, mname, ctor, true, false)
 }
 
+// 添加方法
 func addMethods(cidx int, cname string, ctor interface{}) {
 	fty := reflect.TypeOf(ctor)
 	cls := fty.Out(0)
@@ -229,6 +232,7 @@ func addMethods(cidx int, cname string, ctor interface{}) {
 	}
 }
 
+// 添加方法
 func addMethod(ctor interface{}, cidx int, fidx int, cname string, mname string, fn interface{}, isctor, isdtor bool) {
 	// cidx := gext.classes[cname]
 	// cbid := gencbid(cidx, fidx)
@@ -320,43 +324,68 @@ func AddConstant(name string, val interface{}) error {
 	log.Logger.Println("modname: ", modname)
 	defer C.free(unsafe.Pointer(modname)) // 释放内存
 
-	if val != nil {
-		// 反射数据类型
+	if val != nil {// 反射数据类型
 		valty := reflect.TypeOf(val)
-
 		switch valty.Kind() {
 		case reflect.String:
 			v := val.(string)
 			modval := C.CString(v)
 			defer C.free(unsafe.Pointer(modval))
 			// 调用C函数注册全局常量
-			C.zend_register_stringl_constant_compat(modname, C.size_t(len(name)), modval, C.size_t(len(v)),
-				C.CONST_CS|C.CONST_PERSISTENT, C.int(moduleNumber))
-		case reflect.Int, reflect.Int32, reflect.Uint32, reflect.Int64, reflect.Uint64,
-			reflect.Int8, reflect.Uint8:
+			C.zend_register_stringl_constant_compat(
+				modname,
+				C.size_t(len(name)),
+				modval,
+				C.size_t(len(v)),
+				C.CONST_CS|C.CONST_PERSISTENT,
+				C.int(moduleNumber),
+			)
+
+		case reflect.Int, reflect.Int32, reflect.Uint32, reflect.Int64, reflect.Uint64, reflect.Int8, reflect.Uint8:
 			iv := reflect.ValueOf(val).Convert(reflect.TypeOf(int64(1))).Interface()
-			C.zend_register_long_constant_compat(modname, C.size_t(len(name)), C.zend_long(iv.(int64)),
-				C.CONST_CS|C.CONST_PERSISTENT, C.int(moduleNumber))
+			C.zend_register_long_constant_compat(
+				modname,
+				C.size_t(len(name)),
+				C.zend_long(iv.(int64)),
+				C.CONST_CS|C.CONST_PERSISTENT,
+				C.int(moduleNumber),
+			)
+
 		case reflect.Float32, reflect.Float64:
 			fv := reflect.ValueOf(val).Convert(reflect.TypeOf(float64(1.0))).Interface()
-			C.zend_register_double_constant_compat(modname, C.size_t(len(name)), C.double(fv.(float64)),
-				C.CONST_CS|C.CONST_PERSISTENT, C.int(moduleNumber))
+			C.zend_register_double_constant_compat(
+				modname,
+				C.size_t(len(name)),
+				C.double(fv.(float64)),
+				C.CONST_CS|C.CONST_PERSISTENT,
+				C.int(moduleNumber),
+			)
 		case reflect.Bool:
 			v := val.(bool)
 			var bv int8 = 1
 			if v == false {
 				bv = 0
 			}
-			C.zend_register_bool_constant_compat(modname, C.size_t(len(name)), C.zend_bool(bv),
-				C.CONST_CS|C.CONST_PERSISTENT, C.int(moduleNumber))
+			C.zend_register_bool_constant_compat(
+				modname,
+				C.size_t(len(name)),
+				C.zend_bool(bv),
+				C.CONST_CS|C.CONST_PERSISTENT,
+				C.int(moduleNumber),
+			)
+
 		default:
 			err := fmt.Errorf("Warning, unsported constant value type: %v", valty.Kind().String())
 			log.Logger.Println(err)
 			return err
 		}
 	} else {
-		C.zend_register_null_constant_compat(modname, C.size_t(len(name)),
-			C.CONST_CS|C.CONST_PERSISTENT, C.int(moduleNumber))
+		C.zend_register_null_constant_compat(
+			modname,
+			C.size_t(len(name)),
+			C.CONST_CS|C.CONST_PERSISTENT,
+			C.int(moduleNumber),
+		)
 	}
 
 	return nil

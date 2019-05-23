@@ -101,7 +101,7 @@ func (ini *IniEntryDef) Fill3(name string, defaultValue interface{}, modifiable 
 	ini.zie.modifiable = C.uchar(go2cBool(modifiable)) //php7.3 cannot use go2cBool(modifiable) (type _Ctype_int) as type _Ctype_uchar in assignment
 
 	// ini.zie.orig_modifiable = go2cBool(modifiable)
-	if ZEND_ENGINE == ZEND_ENGINE_3 {
+	if ZendEngine == ZendEngine3 {
 		ini.zie.on_modify = go2cfn(C.gozend_ini_modifier7)
 	} else {
 		ini.zie.on_modify = go2cfn(C.gozend_ini_modifier5)
@@ -121,7 +121,7 @@ func (ini *IniEntryDef) Fill3(name string, defaultValue interface{}, modifiable 
 		ini.zie.mh_arg3 = nil
 	}
 
-	if ZEND_ENGINE == ZEND_ENGINE_3 {
+	if ZendEngine == ZendEngine3 {
 		ini.zie.name_length = C.ushort(len(name))
 		ini.zie.value_length = C.uint32_t(len(value))
 	} else {

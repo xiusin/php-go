@@ -27,7 +27,7 @@ const (
 	PHPTY_IS_OBJECT       = C.IS_OBJECT
 	PHPTY_IS_STRING       = C.IS_STRING
 	PHPTY_IS_RESOURCE     = C.IS_RESOURCE
-	//PHPTY_IS_CONSTANT     = C.IS_CONSTANT	//todo php73构建提醒错误could not determine kind of name for C.IS_CONSTANT
+	//PHPTY_IS_CONSTANT     = C.IS_CONSTANT	//todo php7x构建提醒错误could not determine kind of name for C.IS_CONSTANT
 	PHPTY_IS_CONSTANT_AST = C.IS_CONSTANT_AST
 	PHPTY_IS_CALLABLE     = C.IS_CALLABLE
     PHPTY_IS_SELF         = C.IS_SELF
