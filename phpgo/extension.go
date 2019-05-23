@@ -14,23 +14,26 @@ package phpgo
 
 */
 import "C"
-import "unsafe"
-import "reflect"
-import "errors"
-import "fmt"
-import "log"
-import "os"
-import "strings"
+import (
+	"errors"
+	"fmt"
+	"os"
+	"reflect"
+	"strings"
+	"unsafe"
 
-import "github.com/kitech/php-go/zend"
+	"github.com/xiusin/php-go/log"
+	"github.com/xiusin/php-go/zend"
+)
 
 // 一个程序只能创建一个扩展
 // 所以使用全局变量也没有问题。
 var (
-	ExtName string = ""
-	ExtVer  string = "1.0"
+	ExtName = ""
+	ExtVer  = "1.0"
 )
 
+// 导出Go函数给C使用 , 设置扩展名称与版本号
 //export InitExtension
 func InitExtension(name string, version string) int {
 	ExtName = name
@@ -91,16 +94,17 @@ type Extension struct {
 
 	fidx int // = 0
 
-	objs   map[uintptr]interface{}        // php's this => go's this
-	objs_p map[unsafe.Pointer]interface{} // php's this => go's this
+	objs   map[uintptr]interface{}        // php's this => go's this 对象列表
+	objs_p map[unsafe.Pointer]interface{} // php's this => go's this 对象指针列表
 
-	// phpgo init function
-	module_startup_func   func(int, int) int
-	module_shutdown_func  func(int, int) int
-	request_startup_func  func(int, int) int
-	request_shutdown_func func(int, int) int
+	// php模块初始化函数
+	moduleStartupFunc   minitFunc
+	moduleShutdownFunc  minitFunc
+	requestStartupFunc  minitFunc
+	requestShutdownFunc minitFunc
 
-	inis *zend.IniEntries // ini entries
+	// 配置实体
+	inis *zend.IniEntries
 
 	//
 	me *C.zend_module_entry
@@ -115,6 +119,7 @@ type phpgo_callback_signature struct {
 }
 
 // TODO 把entry位置与cbid分开，这样cbfunc就能够更紧凑了
+// 实例一个扩展实体
 func NewExtension() *Extension {
 	syms := make(map[string]int, 0)
 	classes := make(map[string]int, 0)
@@ -124,16 +129,10 @@ func NewExtension() *Extension {
 
 	classes["global"] = 0 // 可以看作内置函数的类
 
-	this := &Extension{syms: syms, classes: classes, cbs: cbs,
-		objs: objs, objs_p: objs_p}
+	this := &Extension{syms: syms, classes: classes, cbs: cbs, objs: objs, objs_p: objs_p}
 	this.inis = zend.NewIniEntries()
 
 	return this
-}
-
-// depcreated
-func gencbid(cidx int, fidx int) int {
-	return cidx*128 + fidx
 }
 
 func nxtcbid() int {
@@ -181,17 +180,18 @@ func AddFunc(name string, f interface{}) error {
 // 不用逐个方法添加，简单多了。
 // @param ctor 是该类的构造函数，原型 func NewClass(...) *Class
 func AddClass(name string, ctor interface{}) error {
-
+	// 判断是否已经存在类
 	if _, has := gext.classes[name]; !has {
+		// 计算类数量
 		cidx := len(gext.classes)
 		var n C.int = 0
 
 		// must add begin add class
-		if int(n) == 0 {
-			addCtor(cidx, name, ctor)
-			addDtor(cidx, name, ctor)
-			addMethods(cidx, name, ctor)
-		}
+		//if int(n) == 0 {
+		addConstruct(cidx, name, ctor)
+		addDestruct(cidx, name, ctor)
+		addMethods(cidx, name, ctor)
+		//}
 
 		cname := C.CString(name)
 		n = C.zend_add_class(C.int(cidx), cname)
@@ -207,15 +207,15 @@ func AddClass(name string, ctor interface{}) error {
 	return errors.New("add class error.")
 }
 
-func addDtor(cidx int, cname string, ctor interface{}) {
+func addDestruct(cidx int, cname string, ctor interface{}) {
 	mname := "__destruct"
-	fidx := 1
+	fidx := 1 // 方法索引值
 	addMethod(ctor, cidx, fidx, cname, mname, ctor, false, true)
 }
 
-func addCtor(cidx int, cname string, ctor interface{}) {
+func addConstruct(cidx int, cname string, ctor interface{}) {
 	mname := "__construct"
-	fidx := 0
+	fidx := 0 // 方法索引值
 	addMethod(ctor, cidx, fidx, cname, mname, ctor, true, false)
 }
 
@@ -245,18 +245,18 @@ func addMethod(ctor interface{}, cidx int, fidx int, cname string, mname string,
 	}
 
 	isSelf := false
-    methodRetType := reflect.TypeOf(fn)
-    if methodRetType.NumOut() > 0 {
-        classType := reflect.TypeOf(ctor).Out(0)
-        isSelf = classType == methodRetType.Out(0)
-    }
+	methodRetType := reflect.TypeOf(fn)
+	if methodRetType.NumOut() > 0 {
+		classType := reflect.TypeOf(ctor).Out(0)
+		isSelf = classType == methodRetType.Out(0)
+	}
 
 	var rety int
-    if !isSelf {
-    	rety = zend.RetType2Php(fn)
-    } else {
-        rety = zend.PHPTY_IS_SELF
-    }
+	if !isSelf {
+		rety = zend.RetType2Php(fn)
+	} else {
+		rety = zend.PHPTY_IS_SELF
+	}
 
 	ccname := C.CString(cname)
 	cmname := C.CString(mname)
@@ -274,14 +274,15 @@ func addMethod(ctor interface{}, cidx int, fidx int, cname string, mname string,
 	}
 }
 
+// 检查是否为可用函数
 func validFunc(fn interface{}) bool {
 	fty := reflect.TypeOf(fn)
 	if fty.Kind() != reflect.Func {
-		log.Panicln("What's that?", fty.Kind().String())
+		log.Logger.Panicln("What's that?", fty.Kind().String())
 	}
 
 	if fty.IsVariadic() {
-		log.Panicln("Can't support variadic func.", fty.Kind().String())
+		log.Logger.Panicln("Can't support variadic func.", fty.Kind().String())
 	}
 
 	for idx := 0; idx < fty.NumIn(); idx++ {
@@ -297,7 +298,7 @@ func validFunc(fn interface{}) bool {
 		case reflect.Map:
 			fallthrough
 		default:
-			log.Panicln("Can't support arg type:", idx, fty.In(idx).Kind().String())
+			log.Logger.Panicln("Can't support arg type:", idx, fty.In(idx).Kind().String())
 		}
 	}
 
@@ -305,22 +306,22 @@ func validFunc(fn interface{}) bool {
 }
 
 /*
-* @param namespace string optional
+ * namespace 字符串可选, 目前不支持
+ * 这里支持一些简单类型. 如不支持则返回错误
  */
-func AddConstant(name string, val interface{}, namespace interface{}) error {
+func AddConstant(name string, val interface{}) error {
 	if len(name) == 0 {
 		return nil
 	}
-
-	if namespace != nil {
-		log.Println("Warning, namespace parameter not supported now. omited.")
-	}
-
-	module_number := C.phpgo_get_module_number()
+	// 获取模块编号
+	moduleNumber := C.phpgo_get_module_number()
+	log.Logger.Println("module_number: ", moduleNumber)
 	modname := C.CString(strings.ToUpper(name))
-	defer C.free(unsafe.Pointer(modname))
+	log.Logger.Println("modname: ", modname)
+	defer C.free(unsafe.Pointer(modname)) // 释放内存
 
 	if val != nil {
+		// 反射数据类型
 		valty := reflect.TypeOf(val)
 
 		switch valty.Kind() {
@@ -328,18 +329,18 @@ func AddConstant(name string, val interface{}, namespace interface{}) error {
 			v := val.(string)
 			modval := C.CString(v)
 			defer C.free(unsafe.Pointer(modval))
-
+			// 调用C函数注册全局常量
 			C.zend_register_stringl_constant_compat(modname, C.size_t(len(name)), modval, C.size_t(len(v)),
-				C.CONST_CS|C.CONST_PERSISTENT, C.int(module_number))
+				C.CONST_CS|C.CONST_PERSISTENT, C.int(moduleNumber))
 		case reflect.Int, reflect.Int32, reflect.Uint32, reflect.Int64, reflect.Uint64,
 			reflect.Int8, reflect.Uint8:
 			iv := reflect.ValueOf(val).Convert(reflect.TypeOf(int64(1))).Interface()
 			C.zend_register_long_constant_compat(modname, C.size_t(len(name)), C.zend_long(iv.(int64)),
-				C.CONST_CS|C.CONST_PERSISTENT, C.int(module_number))
+				C.CONST_CS|C.CONST_PERSISTENT, C.int(moduleNumber))
 		case reflect.Float32, reflect.Float64:
 			fv := reflect.ValueOf(val).Convert(reflect.TypeOf(float64(1.0))).Interface()
 			C.zend_register_double_constant_compat(modname, C.size_t(len(name)), C.double(fv.(float64)),
-				C.CONST_CS|C.CONST_PERSISTENT, C.int(module_number))
+				C.CONST_CS|C.CONST_PERSISTENT, C.int(moduleNumber))
 		case reflect.Bool:
 			v := val.(bool)
 			var bv int8 = 1
@@ -347,28 +348,27 @@ func AddConstant(name string, val interface{}, namespace interface{}) error {
 				bv = 0
 			}
 			C.zend_register_bool_constant_compat(modname, C.size_t(len(name)), C.zend_bool(bv),
-				C.CONST_CS|C.CONST_PERSISTENT, C.int(module_number))
+				C.CONST_CS|C.CONST_PERSISTENT, C.int(moduleNumber))
 		default:
 			err := fmt.Errorf("Warning, unsported constant value type: %v", valty.Kind().String())
-			log.Println(err)
+			log.Logger.Println(err)
 			return err
 		}
 	} else {
 		C.zend_register_null_constant_compat(modname, C.size_t(len(name)),
-			C.CONST_CS|C.CONST_PERSISTENT, C.int(module_number))
+			C.CONST_CS|C.CONST_PERSISTENT, C.int(moduleNumber))
 	}
 
 	return nil
 }
 
-func AddIniVar(name string, value interface{}, modifiable bool,
-	onModifier func(*zend.IniEntry, string, int) int,
-	displayer func(*zend.IniEntry, int)) {
-	ie := zend.NewIniEntryDef()
-	ie.Fill(name, value, modifiable, nil, nil)
-	ie.SetModifier(onModifier)
-	ie.SetDisplayer(displayer)
-	gext.inis.Add(ie)
+// 添加配置项
+func AddIniVar(name string, value interface{}, modifiable bool, onModifier func(*zend.IniEntry, string, int) int, displayer func(*zend.IniEntry, int)) {
+	ie := zend.NewIniEntryDef()                // 实例化init实体引用
+	ie.Fill(name, value, modifiable, nil, nil) //  填充值
+	ie.SetModifier(onModifier)                 // 设置修改时回调
+	ie.SetDisplayer(displayer)                 // 设置显示回调
+	gext.inis.Add(ie)                          // 将配置实体添加到扩展对象中
 }
 
 // TODO 如果比较多的话，可以摘出来，放在builtin.go中
@@ -380,7 +380,7 @@ func addBuiltins() {
 		AddFunc("GoExit", func(code int) { os.Exit(code) })
 	}
 	if iret = C.gozend_function_registered(C.CString("GoGo")); iret == C.int(0) {
-		AddFunc("GoGo", func(fn interface{}) { log.Println(fn) })
+		AddFunc("GoGo", func(fn interface{}) { log.Logger.Println(fn) })
 	}
 	if iret = C.gozend_function_registered(C.CString("GoPanic")); iret == C.int(0) {
 		AddFunc("GoPanic", func() { panic("got") })
@@ -389,40 +389,50 @@ func addBuiltins() {
 		AddFunc("GoRecover", func() { recover() })
 	}
 	if iret = C.gozend_function_registered(C.CString("GoPrintln")); iret == C.int(0) {
-		AddFunc("GoPrintln", func(p0 int, v interface{}) { log.Println(v, 123333) })
+		AddFunc("GoPrintln", func(p0 int, v interface{}) { log.Logger.Println(v, 123333) })
 	}
 }
+
+type minitFunc func(int, int) int
 
 // TODO init func with go's //export
 // 注册php module 初始化函数
-func RegisterInitFunctions(module_startup_func func(int, int) int,
-	module_shutdown_func func(int, int) int,
-	request_startup_func func(int, int) int,
-	request_shutdown_func func(int, int) int) {
+// mInit 模块启动回调函数 PHP调用MINIT相关例程，使得每个扩展有机会初始化内部变量、分配资源、注册资源处理句柄，以及向ZE注册自己的函数，以便于脚本调用这其中的函数时候ZE知道执行哪些代码
+// mEnd 模块注销回调函数 当RSHUTDOWN完成后，PHP继续等待SAPI的其他文档请求或者是关闭信号。对于CGI和CLI等SAPI，没有“下一个请求”，所以SAPI立刻开始关闭。关闭期间，PHP再次遍历每个扩展，调用其模块关闭（MSHUTDOWN）函数，并最终关闭自己的内核子系统。
+// rInit 请求启动函数 在模块初始化完成后，PHP等待来自SAPI的请求，当接收到SAPI请求后，由ZE为当前被请求的php脚本创建运行环境，并调用每个扩展的Request Initialization(RINIT)函数，使得每个扩展有机会设定特定的环境变量，根据请求分配资源，或者执行其他任务，如审核。
+// rEnd PHP脚本运行结束后，PHP调用每个扩展的请求关闭（RSHUTDOWN）函数以执行最后的清理工作（如将session变量存入磁盘）
+func RegisterInitFunctions(mInit minitFunc, mEnd minitFunc, rInit minitFunc, rEnd minitFunc) {
+	// 分配扩展整个生命周期的回调函数
+	gext.moduleStartupFunc = mInit
+	gext.moduleShutdownFunc = mEnd
+	gext.requestStartupFunc = rInit
+	gext.requestShutdownFunc = rEnd
 
-	gext.module_startup_func = module_startup_func
-	gext.module_shutdown_func = module_shutdown_func
-	gext.request_startup_func = request_startup_func
-	gext.request_shutdown_func = request_shutdown_func
-
+	// 定义一个直接返回函数指针的方法
 	tocip := func(f interface{}) unsafe.Pointer {
 		return unsafe.Pointer(&f)
 	}
-
-	C.phpgo_register_init_functions(tocip(go_module_startup_func), tocip(gext.module_shutdown_func),
-		tocip(gext.request_startup_func), tocip(gext.request_shutdown_func))
+	// 将函数指针传递给C程序
+	C.phpgo_register_init_functions(
+		tocip(goModuleStartupFunc),
+		tocip(gext.moduleShutdownFunc),
+		tocip(gext.requestStartupFunc),
+		tocip(gext.requestShutdownFunc),
+	)
 }
 
-// the module_startup_func proxy
-func go_module_startup_func(a0 int, a1 int) int {
-	// for test begin
+// 模块初始化代理函数. 比如添加一些配置项
+func goModuleStartupFunc(a0 int, a1 int) int {
+	// 开始测试
 	modifier := func(ie *zend.IniEntry, newValue string, stage int) int {
-		// log.Println(ie.Name(), newValue, stage)
+		log.Logger.Printf("ie: %#v, newValue: %s, stage: %d\n", ie, newValue, stage)
 		return 0
 	}
 	displayer := func(ie *zend.IniEntry, itype int) {
 		// log.Println(ie.Name(), itype)
+		log.Logger.Printf("ie: %#v, itype: %d\n", ie, ie, itype)
 	}
+	// 添加配置项.
 	AddIniVar("phpgo.hehe_int", 123, true, modifier, displayer)
 	AddIniVar("phpgo.hehe_bool", true, true, modifier, displayer)
 	AddIniVar("phpgo.hehe_long", 123, true, modifier, displayer)
@@ -431,7 +441,7 @@ func go_module_startup_func(a0 int, a1 int) int {
 
 	gext.inis.Register(a1)
 
-	return gext.module_startup_func(a0, a1)
+	return gext.moduleStartupFunc(a0, a1)
 }
 
 //
@@ -445,8 +455,8 @@ func on_phpgo_function_callback(cbid int, phpthis uintptr,
 	if len(args) > 0 {
 	}
 
-	log.Println("go callback called:", cbid, phpthis, gext.cbs[cbid])
-	log.Println("go callback called:", args)
+	log.Logger.Println("go callback called:", cbid, phpthis, gext.cbs[cbid])
+	log.Logger.Println("go callback called:", args)
 
 	fe := gext.cbs[cbid]
 	// fe.fn.(func())()
@@ -496,8 +506,8 @@ func on_phpgo_function_callback_p(cbid int, phpthis unsafe.Pointer,
 	if len(args) > 0 {
 	}
 
-	log.Println("go callback called:", cbid, phpthis, gext.cbs[cbid], op)
-	log.Println("go callback called:", args)
+	log.Logger.Println("go callback called:", cbid, phpthis, gext.cbs[cbid], op)
+	log.Logger.Println("go callback called:", args)
 
 	fe := gext.cbs[cbid]
 	// fe.fn.(func())()
@@ -522,7 +532,7 @@ func on_phpgo_function_callback_p(cbid int, phpthis unsafe.Pointer,
 
 	outs := fval.Call(argv)
 	ret := zend.RetValue2Php_p(fe.fn, outs)
-	log.Println("meta call ret:", outs, ret)
+	log.Logger.Println("meta call ret:", outs, ret)
 
 	if fe.IsCtor() {
 		zend.CHKNILEXIT(phpthis, "wtf")

@@ -1,8 +1,10 @@
 package zend
 
-import "reflect"
-import "unsafe"
-import "log"
+import (
+	"log"
+	"reflect"
+	"unsafe"
+)
 
 func CHKNILOMIT(v interface{}) {}
 func CHKNILEXIT(v interface{}, args ...interface{}) {

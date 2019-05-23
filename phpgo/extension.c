@@ -42,6 +42,7 @@ static int(*phpgo_module_shutdown_cbfunc)(int, int) = 0;
 static int(*phpgo_request_startup_cbfunc)(int, int) = 0;
 static int(*phpgo_request_shutdown_cbfunc)(int, int) = 0;
 
+// 如果存在模块初始化函数, 则调用
 int phpgo_module_startup_func(int type, int module_number TSRMLS_DC)
 {
     if (phpgo_module_startup_cbfunc) {
@@ -74,13 +75,12 @@ int phpgo_request_shutdown_func(int type, int module_number TSRMLS_DC)
     return 0;
 }
 
-void phpgo_register_init_functions(void *module_startup_func, void *module_shutdown_func,
-                                   void *request_startup_func, void *request_shutdown_func)
+void phpgo_register_init_functions(void *mstf, void *msdf, void *rstf, void *rsdf)
 {
-    phpgo_module_startup_cbfunc = (int (*)(int, int))module_startup_func;
-    phpgo_module_shutdown_cbfunc = (int (*)(int, int))module_shutdown_func;
-    phpgo_request_startup_cbfunc = (int (*)(int, int))request_startup_func;
-    phpgo_request_shutdown_cbfunc = (int (*)(int, int))request_shutdown_func;
+    phpgo_module_startup_cbfunc = (int (*)(int, int))mstf;
+    phpgo_module_shutdown_cbfunc = (int (*)(int, int))msdf;
+    phpgo_request_startup_cbfunc = (int (*)(int, int))rstf;
+    phpgo_request_shutdown_cbfunc = (int (*)(int, int))rsdf;
     return;
 }
 

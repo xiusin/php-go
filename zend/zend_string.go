@@ -9,7 +9,7 @@ zend_string *zend_string_new_ownered(char *str, size_t len, int persistent) {
 	zend_string *ret = zend_string_alloc(len, persistent);
 
 	// memcpy(ZSTR_VAL(ret), str, len);
-    memcpy(&ZSTR_VAL(ret), &str, sizeof(&str));
+    memcpy(&ZSTR_VAL(ret), &str, sizeof(str));
 	ZSTR_VAL(ret)[len] = '\0';
 	return ret;
 }
@@ -20,9 +20,11 @@ char *zend_string_to_char(void *zs) { return (char*)zs;}
 
 */
 import "C"
-import "unsafe"
-import "reflect"
-import "log"
+import (
+	"log"
+	"reflect"
+	"unsafe"
+)
 
 // type ZString *C.zend_string
 

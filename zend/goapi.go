@@ -5,9 +5,11 @@ package zend
 #include "array.h"
 */
 import "C"
-import "reflect"
-import "unsafe"
-import "log"
+import (
+	"log"
+	"reflect"
+	"unsafe"
+)
 
 ////
 //export goapi_array_new

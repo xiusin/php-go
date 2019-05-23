@@ -6,8 +6,10 @@ package phpgo
 import "C"
 import "unsafe"
 
+// 获取模块
 //export get_module
 func get_module() unsafe.Pointer {
+
 	if len(ExtName) == 0 {
 		panic("ext name not set.")
 	}

@@ -21,7 +21,6 @@ func go2cBool(ok bool) C.int {
 	return 0
 }
 
-//
 type go2cfnty *[0]byte
 
 // 参数怎么传递

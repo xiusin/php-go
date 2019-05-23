@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	SINGLE_THREAD = 1
+	SingleThread = 1
 )
 
 func init() {
@@ -46,9 +46,9 @@ func initCLog() {
 func initSingleThread() {
 	if C.gozend_iszts() == 0 {
 		omp := runtime.GOMAXPROCS(0)
-		if omp > SINGLE_THREAD {
-			runtime.GOMAXPROCS(SINGLE_THREAD)
-			log.Printf("Adjust GOMAXPROCS %d => %d\n", omp, SINGLE_THREAD)
+		if omp > SingleThread {
+			runtime.GOMAXPROCS(SingleThread)
+			log.Printf("Adjust GOMAXPROCS %d => %d\n", omp, SingleThread)
 		}
 	}
 

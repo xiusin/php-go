@@ -7,7 +7,7 @@
 #		CGO_CFLAGS="-DLOGLEVEL=error" make
 
 ifeq ($(PHPCFG),)
-	PHPCFG=/usr/bin/php-config
+	PHPCFG=/usr/local/bin/php-config
 endif
 
 ifeq ($(APP),)
@@ -20,7 +20,7 @@ PHPDIR := $(shell $(PHPCFG) --prefix)
 export PATH := $(PHPDIR)/bin:$(PATH)
 export CFLAGS := $(shell $(PHPCFG) --includes)
 export LDFLAGS := -L$(shell $(PHPCFG) --prefix)/lib/
-# by xiusin添加高版本PHP编译报错的问题
+
 export CGO_LDFLAGS_ALLOW=.*
 export CGO_CFLAGS := $(CFLAGS) $(CGO_CFLAGS)
 export CGO_LDFLAGS := $(LDFLAGS) $(CGO_LDFLAGS)

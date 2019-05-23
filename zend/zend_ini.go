@@ -23,31 +23,32 @@ import (
 	"runtime"
 )
 
+// 配置实体
 type IniEntries struct {
 	zies []C.zend_ini_entry_def
 }
 
-var zend_ini_entry_def_zero C.zend_ini_entry_def
+var zendIniEntryDefZero C.zend_ini_entry_def
 
 func NewIniEntries() *IniEntries {
 	this := &IniEntries{}
 	this.zies = make([]C.zend_ini_entry_def, 1)
-	this.zies[0] = zend_ini_entry_def_zero
+	this.zies[0] = zendIniEntryDefZero
 	return this
 }
 
-func (this *IniEntries) Register(module_number int) int {
-	r := C.zend_register_ini_entries(&this.zies[0], C.int(module_number))
+func (ini *IniEntries) Register(moduleNumber int) int {
+	r := C.zend_register_ini_entries(&ini.zies[0], C.int(moduleNumber))
 	log.Println(r)
 	return int(r)
 }
-func (this *IniEntryDef) Unregister(module_number int) {
-	C.zend_unregister_ini_entries(C.int(module_number))
+func (ini *IniEntryDef) Unregister(moduleNumber int) {
+	C.zend_unregister_ini_entries(C.int(moduleNumber))
 }
 
-func (this *IniEntries) Add(ie *IniEntryDef) {
-	this.zies[len(this.zies)-1] = ie.zie
-	this.zies = append(this.zies, zend_ini_entry_def_zero)
+func (ini *IniEntries) Add(ie *IniEntryDef) {
+	ini.zies[len(ini.zies)-1] = ie.zie
+	ini.zies = append(ini.zies, zendIniEntryDefZero)
 }
 
 type IniEntry struct {
@@ -94,66 +95,67 @@ func zendIniEntryDefFree(this *IniEntryDef) {
 	}
 }
 
-func (this *IniEntryDef) Fill3(name string, defaultValue interface{}, modifiable bool,
+func (ini *IniEntryDef) Fill3(name string, defaultValue interface{}, modifiable bool,
 	onModify func(), arg1, arg2, arg3 interface{}, displayer func()) {
-	this.zie.name = C.CString(name)
-	this.zie.modifiable = go2cBool(modifiable)
-	// this.zie.orig_modifiable = go2cBool(modifiable)
+	ini.zie.name = C.CString(name)
+	ini.zie.modifiable = C.uchar(go2cBool(modifiable)) //php7.3 cannot use go2cBool(modifiable) (type _Ctype_int) as type _Ctype_uchar in assignment
+
+	// ini.zie.orig_modifiable = go2cBool(modifiable)
 	if ZEND_ENGINE == ZEND_ENGINE_3 {
-		this.zie.on_modify = go2cfn(C.gozend_ini_modifier7)
+		ini.zie.on_modify = go2cfn(C.gozend_ini_modifier7)
 	} else {
-		this.zie.on_modify = go2cfn(C.gozend_ini_modifier5)
+		ini.zie.on_modify = go2cfn(C.gozend_ini_modifier5)
 	}
-	this.zie.displayer = go2cfn(C.gozend_ini_displayer)
+	ini.zie.displayer = go2cfn(C.gozend_ini_displayer)
 
 	value := fmt.Sprintf("%v", defaultValue)
-	this.zie.value = C.CString(value)
+	ini.zie.value = C.CString(value)
 
 	if arg1 == nil {
-		this.zie.mh_arg1 = nil
+		ini.zie.mh_arg1 = nil
 	}
 	if arg2 == nil {
-		this.zie.mh_arg2 = nil
+		ini.zie.mh_arg2 = nil
 	}
 	if arg3 == nil {
-		this.zie.mh_arg3 = nil
+		ini.zie.mh_arg3 = nil
 	}
 
 	if ZEND_ENGINE == ZEND_ENGINE_3 {
-		this.zie.name_length = C.uint32_t(len(name))
-		this.zie.value_length = C.uint32_t(len(value))
+		ini.zie.name_length = C.ushort(len(name))
+		ini.zie.value_length = C.uint32_t(len(value))
 	} else {
 		// why need +1 for php5?
 		// if not, zend_alter_ini_entry_ex:280行会出现zend_hash_find无结果失败
-		this.zie.name_length = C.uint32_t(len(name) + 1)
-		this.zie.value_length = C.uint32_t(len(value) + 1)
+		ini.zie.name_length = C.ushort(len(name) + 1)
+		ini.zie.value_length = C.uint32_t(len(value) + 1)
 	}
 	log.Println(name, len(name))
 
-	iniNameEntries[name] = this
+	iniNameEntries[name] = ini
 }
 
-func (this *IniEntryDef) Fill2(name string, defaultValue interface{}, modifiable bool,
+func (ini *IniEntryDef) Fill2(name string, defaultValue interface{}, modifiable bool,
 	onModify func(), arg1, arg2 interface{}, displayer func()) {
-	this.Fill3(name, defaultValue, modifiable, onModify, arg1, arg2, nil, displayer)
+	ini.Fill3(name, defaultValue, modifiable, onModify, arg1, arg2, nil, displayer)
 }
 
-func (this *IniEntryDef) Fill1(name string, defaultValue interface{}, modifiable bool,
+func (ini *IniEntryDef) Fill1(name string, defaultValue interface{}, modifiable bool,
 	onModify func(), arg1 interface{}, displayer func()) {
-	this.Fill3(name, defaultValue, modifiable, onModify, arg1, nil, nil, displayer)
+	ini.Fill3(name, defaultValue, modifiable, onModify, arg1, nil, nil, displayer)
 }
 
-func (this *IniEntryDef) Fill(name string, defaultValue interface{}, modifiable bool,
+func (ini *IniEntryDef) Fill(name string, defaultValue interface{}, modifiable bool,
 	onModify func(), displayer func()) {
-	this.Fill3(name, defaultValue, modifiable, onModify, nil, nil, nil, displayer)
+	ini.Fill3(name, defaultValue, modifiable, onModify, nil, nil, nil, displayer)
 }
 
-func (this *IniEntryDef) SetModifier(modifier func(ie *IniEntry, newValue string, state int) int) {
-	this.onModify = modifier
+func (ini *IniEntryDef) SetModifier(modifier func(ie *IniEntry, newValue string, state int) int) {
+	ini.onModify = modifier
 }
 
-func (this *IniEntryDef) SetDisplayer(displayer func(ie *IniEntry, itype int)) {
-	this.onDisplay = displayer
+func (ini *IniEntryDef) SetDisplayer(displayer func(ie *IniEntry, itype int)) {
+	ini.onDisplay = displayer
 }
 
 var iniNameEntries = make(map[string]*IniEntryDef, 0)

@@ -4,7 +4,9 @@ package zend
 
 import (
 	"errors"
+	"fmt"
 	// "fmt"
+	"unsafe"
 )
 
 /*
@@ -21,8 +23,6 @@ import (
 
 */
 import "C"
-import "unsafe"
-import "fmt"
 
 const (
 	ZEND_ENGINE_3 = 3
