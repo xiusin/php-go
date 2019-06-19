@@ -67,3 +67,4 @@ func main() { panic("wtf") }
 - [x] 不限数量 function/method/class 支持
 - [x] 全局ini变量支持
 - [ ] 填充phpinfo
+- [ ] 支持函数回调
