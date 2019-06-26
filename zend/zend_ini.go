@@ -98,7 +98,12 @@ func zendIniEntryDefFree(this *IniEntryDef) {
 func (ini *IniEntryDef) Fill3(name string, defaultValue interface{}, modifiable bool,
 	onModify func(), arg1, arg2, arg3 interface{}, displayer func()) {
 	ini.zie.name = C.CString(name)
-	ini.zie.modifiable = C.uchar(go2cBool(modifiable)) //php7.3 cannot use go2cBool(modifiable) (type _Ctype_int) as type _Ctype_uchar in assignment
+	var phpGt72 = false //todo php大于7.2的版本
+	if phpGt72 {
+		ini.zie.modifiable = C.int(go2cBool(modifiable)) //php7.3 cannot use go2cBool(modifiable) (type _Ctype_int) as type _Ctype_uchar in assignment
+	} else {
+		ini.zie.modifiable = C.int(go2cBool(modifiable))
+	}
 
 	// ini.zie.orig_modifiable = go2cBool(modifiable)
 	if ZendEngine == ZendEngine3 {
@@ -122,12 +127,12 @@ func (ini *IniEntryDef) Fill3(name string, defaultValue interface{}, modifiable 
 	}
 
 	if ZendEngine == ZendEngine3 {
-		ini.zie.name_length = C.ushort(len(name))
+		ini.zie.name_length = C.uint(len(name))
 		ini.zie.value_length = C.uint32_t(len(value))
 	} else {
 		// why need +1 for php5?
 		// if not, zend_alter_ini_entry_ex:280行会出现zend_hash_find无结果失败
-		ini.zie.name_length = C.ushort(len(name) + 1)
+		ini.zie.name_length = C.uint(len(name) + 1)
 		ini.zie.value_length = C.uint32_t(len(value) + 1)
 	}
 	log.Println(name, len(name))

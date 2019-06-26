@@ -7,7 +7,7 @@
 #		CGO_CFLAGS="-DLOGLEVEL=error" make
 
 ifeq ($(PHPCFG),)
-	PHPCFG=/usr/local/bin/php-config
+	PHPCFG=/usr/bin/php-config
 endif
 
 ifeq ($(APP),)

@@ -1,3 +1,5 @@
 <?php
 
-var_dump(PHP_GO_MODULE_NAME);
+var_dump(add_call_back(function(){
+    echo "hello caller";
+}));
